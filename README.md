@@ -1,6 +1,6 @@
 # SoloSpark Pro — Flutter Android MVP
 
-A structured Flutter/Dart app for freelancers and small service businesses to organize clients, invoices/quotes, and expenses.
+A structured Flutter/Dart app for small service businesses to organize clients, invoices/quotes, and expenses.
 
 ## Project structure
 
@@ -16,21 +16,25 @@ lib/
       app_theme.dart
     utils/
       formatters.dart
+      invoice_pdf_generator.dart
   data/
     models/
       client.dart
       expense.dart
       invoice.dart
+      business_profile.dart
     repositories/
       local_business_repository.dart
     services/
       local_storage_service.dart
+      csv_export_service.dart
   features/
     dashboard/presentation/dashboard_page.dart
     invoices/presentation/invoices_page.dart
     clients/presentation/clients_page.dart
     expenses/presentation/expenses_page.dart
     settings/presentation/settings_page.dart
+    settings/presentation/business_profile_page.dart
   shared/
     widgets/
       empty_state.dart
@@ -39,18 +43,27 @@ lib/
       stat_card.dart
 test/
   invoice_model_test.dart
+  widget_test.dart
 ```
 
-## Included in version 1.1.0
-- Feature-based folder structure instead of putting the app in one `main.dart`.
-- Dashboard with paid income, pending amounts, tracked net, client/invoice counts, expenses, and overdue count.
-- Invoice list with All/Paid/Pending/Draft filters and paid/pending status changes.
-- Client directory with search, contact fields, notes, add and delete.
-- Expense tracker with categories, notes, add and delete.
-- Light and dark appearance toggle.
-- Local persistence using `shared_preferences`.
-- Sample records on first launch and reset-sample-data option.
-- Shared widgets, theme, formatting helpers, model classes, repository, and a model serialization test.
+## Included in version 1.2.0
+- Existing feature-based architecture and local persistence retained.
+- Business profile with business/owner name, address, phone, email, Tax ID/EIN, payment instructions, and default payment terms.
+- PDF invoice export/share through Android's native share/print options, with business branding, client, invoice number, due date, service, total, terms, payment instructions, and optional payment link.
+- CSV export of invoices, clients, and expenses for Excel, Google Sheets, or an accountant.
+- Optional payment URL on new invoices (Stripe, PayPal, Venmo, Cash App, or another provider's hosted link).
+- Payment reminder draft shared to messaging/email apps; the user reviews and sends it.
+- Invoice due dates follow simple terms such as `Due on receipt`, `Net 15`, and `Net 30`.
+- Backwards-compatible invoice and business-profile JSON defaults for records created by earlier versions.
+- Dashboard, clients, expenses, invoice filters/status controls, light/dark appearance, and reusable shared widgets.
+- Tests for invoice serialization and the dashboard smoke test.
+
+## Important notes
+- PDF/CSV export uses the Android share sheet. The app does not send emails or messages automatically; you choose an app and send the draft yourself.
+- Payment links are URLs provided by the business owner. SoloSpark does not create payment links, process payments, or automatically mark invoices paid.
+- CSV export writes a temporary file and shares it through Android's share sheet.
+- All records remain on this device. Cloud backup and Google Play Billing/subscriptions are not implemented.
+- The app is an MVP and is not tax or accounting advice.
 
 ## Requirements
 - Flutter stable, Dart 3.3 or newer
@@ -61,23 +74,20 @@ test/
 1. Extract the ZIP.
 2. Open the `SoloSpark_Pro_Flutter` folder in VS Code.
 3. Open the integrated terminal in that folder.
-4. Generate the native Android project files:
-   ```bash
-   flutter create --platforms=android .
-   ```
-   Keep the downloaded `lib/` files and `pubspec.yaml` if prompted about overwriting them.
-5. Install packages:
+4. Install/update the Dart packages:
    ```bash
    flutter pub get
    ```
-6. Confirm your phone or emulator is detected:
+5. Confirm your phone or emulator is detected:
    ```bash
    flutter devices
    ```
-7. Run the app:
+6. Run the app:
    ```bash
    flutter run
    ```
+
+The ZIP includes the Android project folder already, so you do not need to run `flutter create` unless you intentionally remove the `android/` folder.
 
 Build a release APK:
 ```bash
@@ -89,26 +99,3 @@ Run tests:
 ```bash
 flutter test
 ```
-
-## Revenue model (proposed, not activated)
-Possible pricing to validate with actual freelancers:
-- Free: core tracking and limited active invoices.
-- Solo Pro: $4.99/month or $39.99/year for unlimited invoices, PDF export, recurring invoices, reminders, and backup.
-- Business: $9.99/month for multiple business profiles, reports, cloud sync, and team access.
-
-This build does not yet contain Google Play Billing, account login, cloud synchronization, PDF generation/sharing, automated reminders, or payment processing. Those must be implemented and tested before selling subscriptions. Revenue is not guaranteed.
-
-## Suggested next release
-1. Pick one initial niche (e.g. cleaners, tutors, photographers, barbers, or handymen).
-2. Generate polished PDF invoices and share them with Android's share sheet.
-3. Add invoice numbering, tax/discount fields, and a business profile.
-4. Add secure optional backup/sync.
-5. Implement Google Play Billing, restore purchases, and subscription entitlement checks.
-6. Add a privacy policy, terms, support contact, and Play Store assets.
-7. Validate with potential customers before paying to publish or advertise.
-
-## Important limitations
-- Records are local to this device; deleting app data can remove them.
-- Currency is USD and tax calculations are not included.
-- Sample data is included on a clean first launch.
-- This is an MVP, not financial or tax advice.

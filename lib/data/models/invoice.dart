@@ -25,6 +25,7 @@ class Invoice {
     required this.dueDate,
     required this.status,
     this.notes = '',
+    this.paymentLink = '',
   });
 
   final String id;
@@ -36,8 +37,9 @@ class Invoice {
   final DateTime dueDate;
   final InvoiceStatus status;
   final String notes;
+  final String paymentLink;
 
-  Invoice copyWith({InvoiceStatus? status}) => Invoice(
+  Invoice copyWith({InvoiceStatus? status, String? paymentLink}) => Invoice(
     id: id,
     number: number,
     title: title,
@@ -47,6 +49,7 @@ class Invoice {
     dueDate: dueDate,
     status: status ?? this.status,
     notes: notes,
+    paymentLink: paymentLink ?? this.paymentLink,
   );
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +62,7 @@ class Invoice {
     'dueDate': dueDate.toIso8601String(),
     'status': status.name,
     'notes': notes,
+    'paymentLink': paymentLink,
   };
 
   factory Invoice.fromJson(Map<String, dynamic> json) => Invoice(
@@ -71,5 +75,6 @@ class Invoice {
     dueDate: DateTime.tryParse(json['dueDate'] as String? ?? '') ?? DateTime.now(),
     status: InvoiceStatusLabel.parse(json['status'] as String?),
     notes: json['notes'] as String? ?? '',
+    paymentLink: json['paymentLink'] as String? ?? '',
   );
 }

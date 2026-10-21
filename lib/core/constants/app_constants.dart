@@ -6,4 +6,5 @@ class AppConstants {
   static const storageClientsKey = 'solospark.clients.v2';
   static const storageExpensesKey = 'solospark.expenses.v2';
   static const storageBusinessKey = 'solospark.business.v1';
+  static const String storageBusinessProfileKey = 'solospark_business_profile';
 }

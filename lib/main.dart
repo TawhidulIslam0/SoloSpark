@@ -11,7 +11,7 @@ Future<void> main() async {
   await storage.initialize();
 
   final repository = LocalBusinessRepository(storage);
-  await repository.initializeDemoData();
+  await repository.initializeData(); // Updated from initializeDemoData()
 
   runApp(SoloSparkApp(repository: repository));
 }

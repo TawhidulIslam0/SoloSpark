@@ -120,87 +120,26 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _createInvoice(BuildContext context) async {
-    final title = TextEditingController();
-    final clientName = TextEditingController(text: widget.repository.clients.isNotEmpty ? widget.repository.clients.first.name : '');
-    final amount = TextEditingController();
-    final notes = TextEditingController();
-    final formKey = GlobalKey<FormState>();
     final ok = await showModalBottomSheet<bool>(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: _FormSheet(title: 'New invoice', formKey: formKey, children: [
-          _input(title, 'Job or service name', validator: _required),
-          const SizedBox(height: 10),
-          _input(clientName, 'Client name', validator: _required),
-          const SizedBox(height: 10),
-          _input(amount, 'Amount (USD)', keyboard: const TextInputType.numberWithOptions(decimal: true), validator: _positiveNumber),
-          const SizedBox(height: 10),
-          _input(notes, 'Notes (optional)', maxLines: 2),
-        ], onSave: () async {
-          final now = DateTime.now();
-          final invoice = Invoice(
-            id: now.microsecondsSinceEpoch.toString(),
-            number: 'SS-${now.millisecondsSinceEpoch.toString().substring(6)}',
-            title: title.text.trim(), clientName: clientName.text.trim(),
-            amount: double.parse(amount.text), issueDate: now,
-            dueDate: now.add(const Duration(days: 14)), status: InvoiceStatus.sent,
-            notes: notes.text.trim(),
-          );
-          await widget.repository.addInvoice(invoice);
-          if (sheetContext.mounted) Navigator.pop(sheetContext, true);
-        }),
-      ),
+      builder: (sheetContext) => _CreateInvoiceSheet(repository: widget.repository),
     );
-    title.dispose(); clientName.dispose(); amount.dispose(); notes.dispose();
     if (ok == true && mounted) setState(() {});
   }
 
   Future<void> _createClient(BuildContext context) async {
-    final name = TextEditingController(); final email = TextEditingController(); final phone = TextEditingController();
-    final key = GlobalKey<FormState>();
     final ok = await showModalBottomSheet<bool>(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: _FormSheet(title: 'Add a client', formKey: key, children: [
-          _input(name, 'Name or business', validator: _required),
-          const SizedBox(height: 10), _input(email, 'Email (optional)', keyboard: TextInputType.emailAddress),
-          const SizedBox(height: 10), _input(phone, 'Phone (optional)', keyboard: TextInputType.phone),
-        ], onSave: () async {
-          await widget.repository.addClient(Client(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name.text.trim(), email: email.text.trim(), phone: phone.text.trim(), createdAt: DateTime.now()));
-          if (sheetContext.mounted) Navigator.pop(sheetContext, true);
-        }),
-      ),
+      builder: (sheetContext) => _CreateClientSheet(repository: widget.repository),
     );
-    name.dispose(); email.dispose(); phone.dispose();
     if (ok == true && mounted) setState(() {});
   }
 
   Future<void> _createExpense(BuildContext context) async {
-    final title = TextEditingController(); final amount = TextEditingController();
-    final key = GlobalKey<FormState>(); String category = 'Supplies';
     final ok = await showModalBottomSheet<bool>(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (sheetContext) => StatefulBuilder(builder: (sheetContext, setSheet) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: _FormSheet(title: 'Add an expense', formKey: key, children: [
-          _input(title, 'What did you pay for?', validator: _required),
-          const SizedBox(height: 10),
-          _input(amount, 'Amount (USD)', keyboard: const TextInputType.numberWithOptions(decimal: true), validator: _positiveNumber),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            value: category, decoration: const InputDecoration(labelText: 'Category'),
-            items: const ['Supplies', 'Software', 'Travel', 'Marketing', 'Equipment', 'Other'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-            onChanged: (value) => setSheet(() => category = value ?? category),
-          ),
-        ], onSave: () async {
-          await widget.repository.addExpense(Expense(id: DateTime.now().microsecondsSinceEpoch.toString(), title: title.text.trim(), category: category, amount: double.parse(amount.text), date: DateTime.now()));
-          if (sheetContext.mounted) Navigator.pop(sheetContext, true);
-        }),
-      )),
+      builder: (sheetContext) => _CreateExpenseSheet(repository: widget.repository),
     );
-    title.dispose(); amount.dispose();
     if (ok == true && mounted) setState(() {});
   }
 
@@ -216,6 +155,7 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 15), Text(formatCurrency(invoice.amount), style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800, color: AppTheme.green)),
           const SizedBox(height: 5), Text('Due ${formatDate(invoice.dueDate)}'),
           if (invoice.notes.isNotEmpty) ...[const SizedBox(height: 8), Text(invoice.notes)],
+          if (invoice.paymentLink.isNotEmpty) ...[const SizedBox(height: 8), SelectableText('Payment link: ${invoice.paymentLink}')],
           const SizedBox(height: 18),
           Row(children: [
             Expanded(child: OutlinedButton(onPressed: () async {
@@ -239,6 +179,259 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
     if (mounted) setState(() {});
+  }
+}
+
+class _CreateInvoiceSheet extends StatefulWidget {
+  const _CreateInvoiceSheet({required this.repository});
+  final LocalBusinessRepository repository;
+
+  @override
+  State<_CreateInvoiceSheet> createState() => _CreateInvoiceSheetState();
+}
+
+class _CreateInvoiceSheetState extends State<_CreateInvoiceSheet> {
+  late final TextEditingController title;
+  late final TextEditingController clientName;
+  late final TextEditingController amount;
+  late final TextEditingController notes;
+  late final TextEditingController paymentLink;
+  final formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    title = TextEditingController();
+    clientName = TextEditingController(text: widget.repository.clients.isNotEmpty ? widget.repository.clients.first.name : '');
+    amount = TextEditingController();
+    notes = TextEditingController();
+    paymentLink = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    title.dispose();
+    clientName.dispose();
+    amount.dispose();
+    notes.dispose();
+    paymentLink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
+        child: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('New invoice', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 17),
+              _input(title, 'Job or service name', validator: _required),
+              const SizedBox(height: 10),
+              _input(clientName, 'Client name', validator: _required),
+              const SizedBox(height: 10),
+              _input(amount, 'Amount (USD)', keyboard: const TextInputType.numberWithOptions(decimal: true), validator: _positiveNumber),
+              const SizedBox(height: 10),
+              _input(notes, 'Notes (optional)', maxLines: 2),
+              const SizedBox(height: 10),
+              _input(paymentLink, 'Payment link (Stripe, PayPal, Venmo, Cash App)', keyboard: TextInputType.url, validator: _optionalWebUrl),
+              const SizedBox(height: 5),
+              Text('Use a full https:// link supplied by your payment provider.', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : () async {
+                    if (!formKey.currentState!.validate()) return;
+                    setState(() => _isLoading = true);
+                    final now = DateTime.now();
+                    final invoice = Invoice(
+                      id: now.microsecondsSinceEpoch.toString(),
+                      number: 'SS-${now.millisecondsSinceEpoch.toString().substring(6)}',
+                      title: title.text.trim(), clientName: clientName.text.trim(),
+                      amount: double.parse(amount.text), issueDate: now,
+                      dueDate: _dueDateFor(now), status: InvoiceStatus.sent,
+                      notes: notes.text.trim(),
+                      paymentLink: paymentLink.text.trim(),
+                    );
+                    await widget.repository.addInvoice(invoice);
+                    if (context.mounted) Navigator.pop(context, true);
+                  },
+                  child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  DateTime _dueDateFor(DateTime issueDate) {
+    final terms = widget.repository.businessProfile.paymentTerms.trim().toLowerCase();
+    final netDays = RegExp(r'^net\s*(\d+)$').firstMatch(terms);
+    if (netDays != null) {
+      return issueDate.add(Duration(days: int.parse(netDays.group(1)!)));
+    }
+    if (terms == 'due on receipt' || terms == 'due upon receipt' || terms == 'due immediately') {
+      return issueDate;
+    }
+    return issueDate.add(const Duration(days: 14));
+  }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'This field is required' : null;
+  String? _optionalWebUrl(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http') || uri.host.isEmpty) {
+      return 'Enter a full payment URL beginning with https://';
+    }
+    return null;
+  }
+
+  String? _positiveNumber(String? value) {
+    final parsed = double.tryParse(value ?? '');
+    return parsed == null || parsed <= 0 ? 'Enter an amount greater than zero' : null;
+  }
+
+  Widget _input(TextEditingController controller, String label, {String? Function(String?)? validator, TextInputType? keyboard, int maxLines = 1}) =>
+      TextFormField(controller: controller, validator: validator, keyboardType: keyboard, maxLines: maxLines, decoration: InputDecoration(labelText: label));
+}
+
+class _CreateClientSheet extends StatefulWidget {
+  const _CreateClientSheet({required this.repository});
+  final LocalBusinessRepository repository;
+
+  @override
+  State<_CreateClientSheet> createState() => _CreateClientSheetState();
+}
+
+class _CreateClientSheetState extends State<_CreateClientSheet> {
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final key = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    email.dispose();
+    phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
+        child: SingleChildScrollView(
+          child: Form(
+            key: key,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Add a client', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 17),
+              _input(name, 'Name or business', validator: _required),
+              const SizedBox(height: 10),
+              _input(email, 'Email (optional)', keyboard: TextInputType.emailAddress),
+              const SizedBox(height: 10),
+              _input(phone, 'Phone (optional)', keyboard: TextInputType.phone),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : () async {
+                    if (!key.currentState!.validate()) return;
+                    setState(() => _isLoading = true);
+                    await widget.repository.addClient(Client(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name.text.trim(), email: email.text.trim(), phone: phone.text.trim(), createdAt: DateTime.now()));
+                    if (context.mounted) Navigator.pop(context, true);
+                  },
+                  child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'This field is required' : null;
+  Widget _input(TextEditingController controller, String label, {String? Function(String?)? validator, TextInputType? keyboard, int maxLines = 1}) =>
+      TextFormField(controller: controller, validator: validator, keyboardType: keyboard, maxLines: maxLines, decoration: InputDecoration(labelText: label));
+}
+
+class _CreateExpenseSheet extends StatefulWidget {
+  const _CreateExpenseSheet({required this.repository});
+  final LocalBusinessRepository repository;
+
+  @override
+  State<_CreateExpenseSheet> createState() => _CreateExpenseSheetState();
+}
+
+class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
+  final title = TextEditingController();
+  final amount = TextEditingController();
+  final key = GlobalKey<FormState>();
+  String category = 'Supplies';
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    title.dispose();
+    amount.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
+        child: SingleChildScrollView(
+          child: Form(
+            key: key,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Add an expense', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 17),
+              _input(title, 'What did you pay for?', validator: _required),
+              const SizedBox(height: 10),
+              _input(amount, 'Amount (USD)', keyboard: const TextInputType.numberWithOptions(decimal: true), validator: _positiveNumber),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: category, decoration: const InputDecoration(labelText: 'Category'),
+                items: const ['Supplies', 'Software', 'Travel', 'Marketing', 'Equipment', 'Other'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                onChanged: (value) => setState(() => category = value ?? category),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : () async {
+                    if (!key.currentState!.validate()) return;
+                    setState(() => _isLoading = true);
+                    await widget.repository.addExpense(Expense(id: DateTime.now().microsecondsSinceEpoch.toString(), title: title.text.trim(), category: category, amount: double.parse(amount.text), date: DateTime.now()));
+                    if (context.mounted) Navigator.pop(context, true);
+                  },
+                  child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 
   String? _required(String? value) => value == null || value.trim().isEmpty ? 'This field is required' : null;
@@ -283,25 +476,5 @@ class _QuickAction extends StatelessWidget {
         Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
       ]),
     ),
-  );
-}
-
-class _FormSheet extends StatelessWidget {
-  const _FormSheet({required this.title, required this.formKey, required this.children, required this.onSave});
-  final String title; final GlobalKey<FormState> formKey; final List<Widget> children; final Future<void> Function() onSave;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
-    child: SingleChildScrollView(child: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 17),
-      ...children,
-      const SizedBox(height: 18),
-      SizedBox(width: double.infinity, child: FilledButton(onPressed: () async {
-        if (formKey.currentState!.validate()) await onSave();
-      }, child: const Text('Save'))),
-    ]))),
   );
 }
